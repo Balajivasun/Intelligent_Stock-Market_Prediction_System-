@@ -168,21 +168,42 @@ document.addEventListener("DOMContentLoaded", () => {
         return "$";
     }
 
-    async function loadAllData(ticker, period, interval, model) {
+    async function safeFetchJson(url, options = {}) {
+        try {
+            const response = await fetch(url, options);
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (err) {
+                if (!response.ok) {
+                    return { status: "error", message: `Server error (${response.status}): ${response.statusText}` };
+                }
+                return { status: "error", message: "Invalid server response format." };
+            }
+            return data;
+        } catch (e) {
+            return { status: "error", message: e.message || "Failed to communicate with server." };
+        }
+    }
+
+    async function loadAllData(rawTicker, period, interval, model) {
         setLoading(true);
         hideAlert();
 
+        const ticker = String(rawTicker).replace(/\s+/g, "").toUpperCase();
+
         try {
             const [infoRes, histRes, predRes, sentRes, tfRes] = await Promise.all([
-                fetch(`/api/stock/info?ticker=${encodeURIComponent(ticker)}`).then((r) => r.json()),
-                fetch(`/api/stock/history?ticker=${encodeURIComponent(ticker)}&period=${period}&interval=${interval}`).then((r) => r.json()),
-                fetch(`/api/stock/predict`, {
+                safeFetchJson(`/api/stock/info?ticker=${encodeURIComponent(ticker)}`),
+                safeFetchJson(`/api/stock/history?ticker=${encodeURIComponent(ticker)}&period=${period}&interval=${interval}`),
+                safeFetchJson(`/api/stock/predict`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ ticker, period, model_type: model }),
-                }).then((r) => r.json()),
-                fetch(`/api/stock/sentiment?ticker=${encodeURIComponent(ticker)}`).then((r) => r.json()),
-                fetch(`/api/stock/timeframe-analysis?ticker=${encodeURIComponent(ticker)}`).then((r) => r.json()),
+                }),
+                safeFetchJson(`/api/stock/sentiment?ticker=${encodeURIComponent(ticker)}`),
+                safeFetchJson(`/api/stock/timeframe-analysis?ticker=${encodeURIComponent(ticker)}`),
             ]);
 
             if (infoRes.status === "error") throw new Error(infoRes.message);

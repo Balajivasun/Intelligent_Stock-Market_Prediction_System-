@@ -26,7 +26,7 @@ class StockDataFetcher:
         """
         Fetch OHLCV data for a given ticker symbol and interval.
         """
-        ticker = ticker.strip().upper()
+        ticker = str(ticker).replace(" ", "").upper()
         if not ticker:
             raise ValueError("Ticker symbol cannot be empty.")
 
@@ -81,7 +81,7 @@ class StockDataFetcher:
         - Mid Level: Month-to-Month returns for the past 12 months
         - High Level: Year-to-Year (YoY) annual returns
         """
-        ticker = ticker.strip().upper()
+        ticker = str(ticker).replace(" ", "").upper()
         stock = yf.Ticker(ticker)
 
         # 1. Hourly (Bottom-Level)
@@ -173,7 +173,7 @@ class StockDataFetcher:
         """
         Fetch company metadata, current quote, and profile information.
         """
-        ticker = ticker.strip().upper()
+        ticker = str(ticker).replace(" ", "").upper()
         try:
             stock = yf.Ticker(ticker)
             info = stock.info or {}

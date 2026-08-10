@@ -33,17 +33,25 @@ preprocessor = StockPreprocessor(window_size=60)
 sentiment_analyzer = StockSentimentAnalyzer()
 
 
+# --- Static Frontend Serving Routes ---
+
 @app.route("/")
 def serve_dashboard():
     """Serve the main frontend dashboard."""
     return send_from_directory(FRONTEND_DIR, "index.html")
 
 
-@app.route("/<path:path>")
-def serve_static(path):
-    """Serve CSS, JS, and static assets."""
-    return send_from_directory(FRONTEND_DIR, path)
+@app.route("/css/<path:filename>")
+def serve_css(filename):
+    return send_from_directory(os.path.join(FRONTEND_DIR, "css"), filename)
 
+
+@app.route("/js/<path:filename>")
+def serve_js(filename):
+    return send_from_directory(os.path.join(FRONTEND_DIR, "js"), filename)
+
+
+# --- REST API Routes ---
 
 @app.route("/api/health", methods=["GET"])
 def health_check():
@@ -54,7 +62,8 @@ def health_check():
 @app.route("/api/stock/info", methods=["GET"])
 def get_stock_info():
     """Fetch company profile, quote, and stats."""
-    ticker = request.args.get("ticker", "AAPL").strip().upper()
+    raw_ticker = request.args.get("ticker", "AAPL")
+    ticker = raw_ticker.replace(" ", "").upper()
     try:
         info = fetcher.fetch_company_info(ticker)
         return jsonify({"status": "success", "data": info})
@@ -65,7 +74,8 @@ def get_stock_info():
 @app.route("/api/stock/history", methods=["GET"])
 def get_stock_history():
     """Fetch historical OHLCV and indicators for charts."""
-    ticker = request.args.get("ticker", "AAPL").strip().upper()
+    raw_ticker = request.args.get("ticker", "AAPL")
+    ticker = raw_ticker.replace(" ", "").upper()
     period = request.args.get("period", "1y").strip().lower()
     interval = request.args.get("interval", "1d").strip().lower()
 
@@ -112,7 +122,8 @@ def get_timeframe_analysis():
     - Monthly (Month-to-month return breakdown)
     - Yearly (Year-to-year annual performance)
     """
-    ticker = request.args.get("ticker", "AAPL").strip().upper()
+    raw_ticker = request.args.get("ticker", "AAPL")
+    ticker = raw_ticker.replace(" ", "").upper()
     try:
         stats = fetcher.fetch_multi_timeframe_stats(ticker)
         return jsonify({"status": "success", "data": stats})
@@ -123,7 +134,8 @@ def get_timeframe_analysis():
 @app.route("/api/stock/sentiment", methods=["GET"])
 def get_stock_sentiment():
     """Fetch news articles and compute NLP sentiment polarity score."""
-    ticker = request.args.get("ticker", "AAPL").strip().upper()
+    raw_ticker = request.args.get("ticker", "AAPL")
+    ticker = raw_ticker.replace(" ", "").upper()
     try:
         sentiment_data = sentiment_analyzer.analyze_ticker_news(ticker, max_articles=8)
         return jsonify({"status": "success", "data": sentiment_data})
@@ -134,7 +146,8 @@ def get_stock_sentiment():
 @app.route("/api/stock/explain", methods=["GET"])
 def get_stock_explanation():
     """Provide plain-English technical indicator signal decomposition."""
-    ticker = request.args.get("ticker", "AAPL").strip().upper()
+    raw_ticker = request.args.get("ticker", "AAPL")
+    ticker = raw_ticker.replace(" ", "").upper()
     try:
         df = fetcher.fetch_history(ticker, period="1y")
         df_feat = preprocessor.add_technical_indicators(df)
@@ -147,8 +160,9 @@ def get_stock_explanation():
 @app.route("/api/stock/predict", methods=["POST"])
 def predict_stock():
     """Train models and generate next-day and multi-day stock price predictions."""
-    body = request.get_json() or {}
-    ticker = body.get("ticker", "AAPL").strip().upper()
+    body = request.get_json(silent=True) or {}
+    raw_ticker = body.get("ticker", "AAPL")
+    ticker = str(raw_ticker).replace(" ", "").upper()
     period = body.get("period", "2y").strip().lower()
     model_type = body.get("model_type", "all").strip().lower()
 
@@ -233,7 +247,7 @@ def predict_stock():
                 "directional_accuracy": lstm_eval["metrics"]["directional_accuracy"],
                 "next_day_pred": lstm_forecast[0] if lstm_forecast else latest_actual_close,
             })
-            if model_type in ["lstm", "all"]:
+            if model_type == "lstm":
                 selected_model_name = "LSTM Deep Learning"
                 next_day_target = lstm_forecast[0]
                 five_day_forecast = lstm_forecast
@@ -275,6 +289,31 @@ def predict_stock():
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+
+
+# --- Global Error Handlers & Fallback Routing ---
+
+@app.errorhandler(404)
+def handle_404(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"status": "error", "message": "API endpoint not found"}), 404
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
+
+@app.errorhandler(500)
+def handle_500(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"status": "error", "message": "Internal Server Error"}), 500
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
+
+@app.route("/<path:path>")
+def serve_fallback(path):
+    if path.startswith("api/"):
+        return jsonify({"status": "error", "message": "API endpoint not found"}), 404
+    if os.path.exists(os.path.join(FRONTEND_DIR, path)):
+        return send_from_directory(FRONTEND_DIR, path)
+    return send_from_directory(FRONTEND_DIR, "index.html")
 
 
 if __name__ == "__main__":
