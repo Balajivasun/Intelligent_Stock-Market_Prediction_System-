@@ -1,1 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligent Stock Market Prediction System</title>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- Top Navigation Header -->
+        <header class="top-header">
+            <div class="header-left">
+                <div class="logo-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+                        <polyline points="16 7 22 7 22 13"></polyline>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="app-title">Intelligent Stock Market Prediction System</h1>
+                    <p class="app-subtitle">Multi-Model Forecasting (LSTM, Random Forest, Linear Regression), Multi-Timeframe Analytics & NLP Sentiment</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="status-badge" id="systemStatus"><span class="dot"></span> System Ready</span>
+            </div>
+        </header>
 
+        <!-- Search & Control Toolbar -->
+        <section class="control-panel glass-card">
+            <div class="controls-grid">
+                <!-- Ticker Input & Quick Selector -->
+                <div class="control-group">
+                    <label for="tickerInput">Stock Ticker Symbol</label>
+                    <div class="search-box">
+                        <input type="text" id="tickerInput" placeholder="e.g. AAPL, RELIANCE.NS, TCS.NS" value="AAPL" autocomplete="off">
+                        <button id="searchBtn" class="primary-btn">
+                            <span class="btn-text">Analyze</span>
+                            <span class="spinner" style="display: none;"></span>
+                        </button>
+                    </div>
+                    <div class="quick-presets">
+                        <span class="preset-label">Presets:</span>
+                        <button class="preset-chip active" data-ticker="AAPL">AAPL</button>
+                        <button class="preset-chip" data-ticker="RELIANCE.NS">RELIANCE</button>
+                        <button class="preset-chip" data-ticker="TCS.NS">TCS</button>
+                        <button class="preset-chip" data-ticker="INFY.NS">INFY</button>
+                        <button class="preset-chip" data-ticker="MSFT">MSFT</button>
+                        <button class="preset-chip" data-ticker="TSLA">TSLA</button>
+                    </div>
+                </div>
+
+                <!-- Timeframe & Granularity Selector -->
+                <div class="control-group">
+                    <label>Timeframe & Granularity</label>
+                    <div class="segmented-control" id="periodSelector">
+                        <button class="segment-btn" data-period="1d" data-interval="1h">1D (1H)</button>
+                        <button class="segment-btn" data-period="5d" data-interval="1h">5D (1H)</button>
+                        <button class="segment-btn" data-period="1mo" data-interval="1d">1M (1D)</button>
+                        <button class="segment-btn" data-period="6mo" data-interval="1d">6M (1D)</button>
+                        <button class="segment-btn active" data-period="1y" data-interval="1d">1Y (1D)</button>
+                        <button class="segment-btn" data-period="5y" data-interval="1mo">5Y (1M)</button>
+                    </div>
+                </div>
+
+                <!-- Model Selector -->
+                <div class="control-group">
+                    <label for="modelSelect">Prediction Model</label>
+                    <select id="modelSelect" class="custom-select">
+                        <option value="all" selected>Compare All Models</option>
+                        <option value="lstm">LSTM (PyTorch Deep Learning)</option>
+                        <option value="rf">Random Forest Regressor</option>
+                        <option value="linear">Linear Regression (Baseline)</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Notification / Alert Message -->
+        <div id="alertBox" class="alert-banner" style="display: none;"></div>
+
+        <!-- Stock Overview Stats Banner -->
+        <section class="overview-grid">
+            <div class="stat-card glass-card">
+                <div class="stat-header">
+                    <span class="company-name" id="stockName">Apple Inc.</span>
+                    <span class="sector-pill" id="stockSector">Technology</span>
+                </div>
+                <div class="price-display">
+                    <span class="price-value" id="currentPrice">$0.00</span>
+                    <span class="change-pill" id="priceChange">+0.00 (+0.00%)</span>
+                </div>
+                <div class="meta-row">
+                    <span>Currency: <strong id="stockCurrency">USD</strong></span>
+                    <span>Volume: <strong id="stockVolume">0</strong></span>
+                </div>
+            </div>
+
+            <!-- Next-Day Prediction Card -->
+            <div class="stat-card glass-card highlight-card">
+                <div class="stat-header">
+                    <span class="card-label">Next-Day Forecast (Target)</span>
+                    <span class="signal-badge" id="signalBadge">ANALYZING</span>
+                </div>
+                <div class="prediction-display">
+                    <span class="pred-price-value" id="predictedPrice">--</span>
+                    <span class="pred-change-pill" id="predictedChange">--</span>
+                </div>
+                <div class="model-meta">
+                    <span>Model: <strong id="activeModelLabel">LSTM Neural Network</strong></span>
+                    <span>Horizon: <strong>1 to 5 Days</strong></span>
+                </div>
+            </div>
+
+            <!-- Technical & Sentiment Mood Card -->
+            <div class="stat-card glass-card">
+                <div class="stat-header">
+                    <span class="card-label">Consensus & Market Mood</span>
+                </div>
+                <div class="mood-container">
+                    <div class="mood-item">
+                        <span class="mood-title">Technical Consensus</span>
+                        <strong class="mood-val" id="techConsensus">--</strong>
+                    </div>
+                    <div class="mood-item">
+                        <span class="mood-title">News NLP Sentiment</span>
+                        <strong class="mood-val" id="newsSentimentMood">--</strong>
+                    </div>
+                </div>
+                <div class="range-bar-wrapper">
+                    <div class="range-labels">
+                        <span id="fiftyTwoLow">52W L: --</span>
+                        <span id="fiftyTwoHigh">52W H: --</span>
+                    </div>
+                    <div class="range-track">
+                        <div class="range-fill" id="fiftyTwoRangeFill" style="width: 50%;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Chart Section -->
+        <section class="chart-section glass-card">
+            <div class="chart-header">
+                <div class="chart-title-group">
+                    <h2 class="section-heading" id="chartHeading">Historical Stock Price & Future Forecast</h2>
+                    <p class="section-subtext" id="chartSubtext">Historical prices, moving averages, and 5-day predictive trajectory</p>
+                </div>
+                <div class="chart-toggles">
+                    <button class="toggle-btn active" data-dataset="sma20">SMA 20</button>
+                    <button class="toggle-btn active" data-dataset="sma50">SMA 50</button>
+                </div>
+            </div>
+            <div class="chart-canvas-container">
+                <canvas id="priceChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Multi-Timeframe Analysis Section: Hourly (Bottom-Level), Month-to-Month, and Year-to-Year -->
+        <section class="timeframe-analysis-section glass-card">
+            <div class="card-title-row">
+                <div>
+                    <h2 class="section-heading">Multi-Timeframe Comparative Analysis</h2>
+                    <p class="section-subtext">Bottom-level intraday hourly movement vs. medium-term monthly returns vs. long-term annual performance</p>
+                </div>
+                <span class="info-tag">Granular Timeframe Breakdown</span>
+            </div>
+            <div class="timeframe-grid">
+                <!-- 1. Bottom-Level: Hour-to-Hour Intraday Dynamics -->
+                <div class="timeframe-card">
+                    <div class="tf-card-header">
+                        <span class="tf-card-title">Hour-to-Hour (Intraday)</span>
+                        <span class="tf-badge" id="hourlyTrendBadge">Trend: --</span>
+                    </div>
+                    <div class="tf-meta-row">
+                        <span>Hourly Volatility: <strong id="hourlyVolVal">--%</strong></span>
+                    </div>
+                    <div class="hourly-table-wrap">
+                        <table class="mini-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Price</th>
+                                    <th>Chg %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hourlyTableBody">
+                                <tr><td colspan="3" class="text-center">Loading hourly bars...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 2. Mid-Level: Month-to-Month Performance -->
+                <div class="timeframe-card">
+                    <div class="tf-card-header">
+                        <span class="tf-card-title">Month-to-Month Breakdown</span>
+                        <span class="info-tag-sub">Past 12 Months</span>
+                    </div>
+                    <div class="monthly-grid" id="monthlyGrid">
+                        <div class="placeholder-text">Loading monthly return performance...</div>
+                    </div>
+                </div>
+
+                <!-- 3. High-Level: Year-to-Year (YoY) Annual Performance -->
+                <div class="timeframe-card">
+                    <div class="tf-card-header">
+                        <span class="tf-card-title">Year-to-Year (YoY) Performance</span>
+                        <span class="info-tag-sub">Multi-Year Trajectory</span>
+                    </div>
+                    <div class="yearly-list" id="yearlyList">
+                        <div class="placeholder-text">Loading annual performance...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Model Comparison & Explainability Section -->
+        <section class="analysis-grid">
+            <!-- Multi-Model Performance Comparison Table -->
+            <div class="glass-card table-card">
+                <div class="card-title-row">
+                    <h3 class="card-heading">Model Performance Comparison</h3>
+                    <span class="info-tag">Out-of-Sample Test Set Evaluation</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Model / Algorithm</th>
+                                <th>RMSE</th>
+                                <th>MAE</th>
+                                <th>MAPE (%)</th>
+                                <th>Directional Acc.</th>
+                                <th>Next-Day Target</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modelComparisonBody">
+                            <tr>
+                                <td colspan="6" class="text-center">Run analysis to view model comparison results.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Explainable AI (XAI) / Feature Importance -->
+            <div class="glass-card explain-card">
+                <div class="card-title-row">
+                    <h3 class="card-heading">Model Interpretability (XAI)</h3>
+                    <span class="info-tag">Feature Importance</span>
+                </div>
+                <p class="card-desc">Top feature contributions in Random Forest model explaining price drivers:</p>
+                <div class="feature-bars-container" id="featureBarsContainer">
+                    <div class="placeholder-text">Loading feature importance weights...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Technical Signals & Live News Sentiment Section -->
+        <section class="analysis-grid">
+            <!-- Technical Indicator Signal Decomposition -->
+            <div class="glass-card">
+                <div class="card-title-row">
+                    <h3 class="card-heading">Technical Indicator Breakdown</h3>
+                    <span class="info-tag">Rule-Based Reasoning</span>
+                </div>
+                <div class="signals-list" id="technicalSignalsList">
+                    <div class="placeholder-text">Analyzing technical indicators...</div>
+                </div>
+            </div>
+
+            <!-- Live News & Sentiment Feed -->
+            <div class="glass-card">
+                <div class="card-title-row">
+                    <h3 class="card-heading">Live News & NLP Sentiment Feed</h3>
+                    <div class="sentiment-pill-group">
+                        <span class="badge-pos" id="posPctBadge">Bullish: 0%</span>
+                        <span class="badge-neu" id="neuPctBadge">Neutral: 0%</span>
+                        <span class="badge-neg" id="negPctBadge">Bearish: 0%</span>
+                    </div>
+                </div>
+                <div class="news-list" id="newsFeedList">
+                    <div class="placeholder-text">Fetching latest market news...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>Intelligent Stock Market Prediction System</p>
+            <p class="footer-disclaimer">Disclaimer: For educational and demonstration purposes only. Stock predictions are generated by statistical/ML algorithms and should not be used as financial advice.</p>
+        </footer>
+    </div>
+
+    <!-- Application Script -->
+    <script src="/js/app.js"></script>
+</body>
+</html>
