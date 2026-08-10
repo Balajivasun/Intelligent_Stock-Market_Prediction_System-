@@ -9,13 +9,13 @@ from backend.utils import calculate_metrics
 
 
 class RandomForestStockModel:
-    def __init__(self, n_estimators: int = 100, random_state: int = 42):
+    def __init__(self, n_estimators: int = 30, random_state: int = 42):
         self.model = RandomForestRegressor(
             n_estimators=n_estimators,
-            max_depth=10,
+            max_depth=8,
             min_samples_split=5,
             random_state=random_state,
-            n_jobs=-1,
+            n_jobs=1,
         )
         self.feature_names: List[str] = []
         self.is_trained = False

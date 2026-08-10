@@ -214,9 +214,9 @@ def predict_stock():
                 next_day_target = lin_forecast[0]
                 five_day_forecast = lin_forecast
 
-        # 2. Random Forest Regressor
+        # 2. Random Forest Regressor (Low RAM profile)
         if model_type in ["rf", "all"]:
-            rf_model = RandomForestStockModel(n_estimators=80, random_state=42)
+            rf_model = RandomForestStockModel(n_estimators=30, random_state=42)
             rf_eval = rf_model.train_and_evaluate(X_train_tab, y_train_tab, X_test_tab, y_test_tab)
             rf_forecast = rf_model.predict_next_days(latest_tab_row, days=5)
             results["rf"] = {**rf_eval, "forecast_5d": rf_forecast}
@@ -233,9 +233,9 @@ def predict_stock():
                 next_day_target = rf_forecast[0]
                 five_day_forecast = rf_forecast
 
-        # 3. LSTM Deep Learning
+        # 3. LSTM Deep Learning (Low RAM profile)
         if model_type in ["lstm", "all"]:
-            lstm = LSTMStockModel(hidden_dim=64, num_layers=2, epochs=25, lr=0.006)
+            lstm = LSTMStockModel(hidden_dim=32, num_layers=2, epochs=12, lr=0.008)
             lstm_eval = lstm.train_and_evaluate(X_train_seq, y_train_seq, X_test_seq, y_test_seq, scaler)
             lstm_forecast = lstm.predict_next_days(latest_seq_scaled, days=5)
             results["lstm"] = {**lstm_eval, "forecast_5d": lstm_forecast}
@@ -247,7 +247,7 @@ def predict_stock():
                 "directional_accuracy": lstm_eval["metrics"]["directional_accuracy"],
                 "next_day_pred": lstm_forecast[0] if lstm_forecast else latest_actual_close,
             })
-            if model_type == "lstm":
+            if model_type == "lstm" or model_type == "all":
                 selected_model_name = "LSTM Deep Learning"
                 next_day_target = lstm_forecast[0]
                 five_day_forecast = lstm_forecast
@@ -266,6 +266,9 @@ def predict_stock():
             signal_color = "neutral"
 
         tech_exp = generate_technical_explanations(df_feat)
+
+        import gc
+        gc.collect()
 
         response_data = {
             "symbol": ticker,

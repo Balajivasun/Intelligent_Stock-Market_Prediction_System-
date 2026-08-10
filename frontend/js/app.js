@@ -194,33 +194,42 @@ document.addEventListener("DOMContentLoaded", () => {
         const ticker = String(rawTicker).replace(/\s+/g, "").toUpperCase();
 
         try {
-            const [infoRes, histRes, predRes, sentRes, tfRes] = await Promise.all([
+            // Phase 1: Rapid metadata and chart history load
+            const [infoRes, histRes] = await Promise.all([
                 safeFetchJson(`/api/stock/info?ticker=${encodeURIComponent(ticker)}`),
                 safeFetchJson(`/api/stock/history?ticker=${encodeURIComponent(ticker)}&period=${period}&interval=${interval}`),
-                safeFetchJson(`/api/stock/predict`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ ticker, period, model_type: model }),
-                }),
-                safeFetchJson(`/api/stock/sentiment?ticker=${encodeURIComponent(ticker)}`),
-                safeFetchJson(`/api/stock/timeframe-analysis?ticker=${encodeURIComponent(ticker)}`),
             ]);
 
             if (infoRes.status === "error") throw new Error(infoRes.message);
             if (histRes.status === "error") throw new Error(histRes.message);
-            if (predRes.status === "error") throw new Error(predRes.message);
 
             const currSymbol = getCurrencySymbol(infoRes.data.currency);
-
             renderOverview(infoRes.data, currSymbol);
-            renderPredictionCard(predRes.data, currSymbol);
-            renderChart(histRes.data, predRes.data, currSymbol, interval);
-            renderComparisonTable(predRes.data, currSymbol);
-            renderExplainability(predRes.data);
+            renderChart(histRes.data, null, currSymbol, interval);
 
-            if (predRes.data.technical_indicators) {
-                renderTechnicalSignals(predRes.data.technical_indicators);
+            // Phase 2: Sequential model prediction, sentiment & multi-timeframe analytics
+            const predRes = await safeFetchJson(`/api/stock/predict`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ticker, period, model_type: model }),
+            });
+
+            if (predRes && predRes.status === "success") {
+                renderPredictionCard(predRes.data, currSymbol);
+                renderChart(histRes.data, predRes.data, currSymbol, interval);
+                renderComparisonTable(predRes.data, currSymbol);
+                renderExplainability(predRes.data);
+
+                if (predRes.data.technical_indicators) {
+                    renderTechnicalSignals(predRes.data.technical_indicators);
+                }
             }
+
+            // Phase 3: Sentiment and timeframe data
+            const [sentRes, tfRes] = await Promise.all([
+                safeFetchJson(`/api/stock/sentiment?ticker=${encodeURIComponent(ticker)}`),
+                safeFetchJson(`/api/stock/timeframe-analysis?ticker=${encodeURIComponent(ticker)}`),
+            ]);
 
             if (sentRes && sentRes.status === "success") {
                 renderSentimentFeed(sentRes.data);
@@ -296,11 +305,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const futureForecastLine = new Array(histDates.length - 1).fill(null);
         futureForecastLine.push(histPrices[histPrices.length - 1]);
 
-        if (!isHourly) {
-            prediction.future_dates.forEach((d) => allDates.push(d));
+        if (prediction && !isHourly) {
+            if (prediction.future_dates) {
+                prediction.future_dates.forEach((d) => allDates.push(d));
+            }
             if (prediction.future_forecast && prediction.future_forecast.length > 0) {
                 prediction.future_forecast.forEach((p) => futureForecastLine.push(p));
-            } else {
+            } else if (prediction.next_day_predicted_price) {
                 futureForecastLine.push(prediction.next_day_predicted_price);
             }
         }
@@ -346,7 +357,7 @@ document.addEventListener("DOMContentLoaded", () => {
             },
         ];
 
-        if (!isHourly) {
+        if (prediction && !isHourly) {
             datasets.push({
                 id: "forecast",
                 label: "5-Day Forecast Projection",

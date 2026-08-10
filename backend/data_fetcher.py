@@ -20,7 +20,23 @@ class StockDataFetcher:
 
     def __init__(self, cache_enabled: bool = True):
         self.cache_enabled = cache_enabled
-        self._cache: Dict[str, Tuple[datetime.datetime, pd.DataFrame]] = {}
+        self._cache: Dict[str, Tuple[datetime.datetime, Any]] = {}
+
+    def _get_from_cache(self, key: str, max_age_seconds: int = 180):
+        if not self.cache_enabled:
+            return None
+        if key in self._cache:
+            ts, val = self._cache[key]
+            if (datetime.datetime.now() - ts).total_seconds() < max_age_seconds:
+                return val
+        return None
+
+    def _set_cache(self, key: str, val: Any):
+        if self.cache_enabled:
+            # Keep cache size small (< 20 items)
+            if len(self._cache) > 20:
+                self._cache.clear()
+            self._cache[key] = (datetime.datetime.now(), val)
 
     def fetch_history(self, ticker: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame:
         """
@@ -38,6 +54,11 @@ class StockDataFetcher:
         # yfinance restriction: 1h interval is only available for periods <= 730d (approx 2y)
         if interval == "1h" and period in ["2y", "5y", "max"]:
             period = "1mo"
+
+        cache_key = f"hist_{ticker}_{period}_{interval}"
+        cached = self._get_from_cache(cache_key)
+        if cached is not None:
+            return cached.copy()
 
         try:
             stock = yf.Ticker(ticker)
@@ -67,6 +88,7 @@ class StockDataFetcher:
             if len(df) < 5:
                 raise ValueError(f"Insufficient historical data ({len(df)} bars) for ticker '{ticker}'.")
 
+            self._set_cache(cache_key, df)
             return df
 
         except Exception as e:
@@ -82,6 +104,11 @@ class StockDataFetcher:
         - High Level: Year-to-Year (YoY) annual returns
         """
         ticker = str(ticker).replace(" ", "").upper()
+        cache_key = f"tf_{ticker}"
+        cached = self._get_from_cache(cache_key)
+        if cached is not None:
+            return cached
+
         stock = yf.Ticker(ticker)
 
         # 1. Hourly (Bottom-Level)
@@ -158,7 +185,7 @@ class StockDataFetcher:
         except Exception:
             yearly_returns = []
 
-        return {
+        result = {
             "symbol": ticker,
             "hourly": {
                 "trend": hourly_trend,
@@ -168,12 +195,19 @@ class StockDataFetcher:
             "monthly": monthly_returns,
             "yearly": yearly_returns,
         }
+        self._set_cache(cache_key, result)
+        return result
 
     def fetch_company_info(self, ticker: str) -> Dict[str, Any]:
         """
         Fetch company metadata, current quote, and profile information.
         """
         ticker = str(ticker).replace(" ", "").upper()
+        cache_key = f"info_{ticker}"
+        cached = self._get_from_cache(cache_key)
+        if cached is not None:
+            return cached
+
         try:
             stock = yf.Ticker(ticker)
             info = stock.info or {}
@@ -200,7 +234,7 @@ class StockDataFetcher:
             price_change = current_price - previous_close if previous_close else 0.0
             price_change_pct = (price_change / previous_close * 100.0) if previous_close else 0.0
 
-            return {
+            result = {
                 "symbol": ticker,
                 "name": info.get("shortName") or info.get("longName") or ticker,
                 "currency": info.get("currency", "USD"),
@@ -219,6 +253,8 @@ class StockDataFetcher:
                 "summary": info.get("longBusinessSummary", "No company summary available."),
                 "website": info.get("website", ""),
             }
+            self._set_cache(cache_key, result)
+            return result
 
         except Exception as e:
             return {

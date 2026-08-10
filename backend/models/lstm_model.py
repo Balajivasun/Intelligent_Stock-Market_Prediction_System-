@@ -3,15 +3,19 @@ PyTorch LSTM Deep Learning Model
 """
 
 from typing import Dict, Any, List
+import gc
 import numpy as np
 import torch
 import torch.nn as nn
 from sklearn.preprocessing import MinMaxScaler
 from backend.utils import calculate_metrics
 
+# Restrict PyTorch to a single thread to maintain ultra-low memory on free-tier hosting
+torch.set_num_threads(1)
+
 
 class StockLSTMNetwork(nn.Module):
-    def __init__(self, input_dim: int = 1, hidden_dim: int = 64, num_layers: int = 2, dropout: float = 0.2):
+    def __init__(self, input_dim: int = 1, hidden_dim: int = 32, num_layers: int = 2, dropout: float = 0.1):
         super(StockLSTMNetwork, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -32,7 +36,7 @@ class StockLSTMNetwork(nn.Module):
 
 
 class LSTMStockModel:
-    def __init__(self, hidden_dim: int = 64, num_layers: int = 2, epochs: int = 25, lr: float = 0.005):
+    def __init__(self, hidden_dim: int = 32, num_layers: int = 2, epochs: int = 12, lr: float = 0.008):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.epochs = epochs
@@ -60,13 +64,13 @@ class LSTMStockModel:
             input_dim=input_dim,
             hidden_dim=self.hidden_dim,
             num_layers=self.num_layers,
-            dropout=0.2,
+            dropout=0.1,
         )
 
         criterion = nn.MSELoss()
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=1e-5)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
-        batch_size = 32
+        batch_size = 64
         dataset_size = len(X_train)
         self.model.train()
 
@@ -103,13 +107,17 @@ class LSTMStockModel:
 
         metrics = calculate_metrics(y_test_inv, y_pred_inv, prev_prices=prev_test_prices)
 
+        # Free temporary tensors
+        del X_train_tensor, y_train_tensor, X_test_tensor
+        gc.collect()
+
         return {
             "model_name": "LSTM Neural Network (Deep Learning)",
             "metrics": metrics,
             "y_test": [round(float(v), 2) for v in y_test_inv],
             "y_pred": [round(float(v), 2) for v in y_pred_inv],
             "training_loss": [round(float(l), 5) for l in loss_history],
-            "architecture": f"2-Layer LSTM (Hidden Dim={self.hidden_dim}, Dropout=0.2, Seq Len={X_train.shape[1]})",
+            "architecture": f"2-Layer LSTM (Hidden Dim={self.hidden_dim}, Seq Len={X_train.shape[1]})",
         }
 
     def predict_next_days(self, last_sequence_scaled: np.ndarray, days: int = 5) -> List[float]:
@@ -130,4 +138,5 @@ class LSTMStockModel:
                 forecasts.append(round(float(pred_price), 2))
                 curr_seq.append(pred_scaled)
 
+        gc.collect()
         return forecasts
